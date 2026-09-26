@@ -144,6 +144,8 @@ while True:
     text_color = (0, 255, 0) if bot_active else (0, 0, 255)
     
     cv2.putText(frame, status_text + stage_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, text_color, 2, cv2.LINE_AA)
+    # ขนาดหน้าจอ
+    cv2.putText(frame, "Require: 1600x900 (Window mode) | Scale 100%", (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
     cv2.imshow("NOTE DETECTOR", frame)
     
     if cv2.waitKey(1) & 0xFF == ord("q"):
