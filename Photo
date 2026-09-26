@@ -50,10 +50,8 @@ template_path = get_template_path()
 
 if os.path.exists(template_path):
     ui_template = cv2.imread(template_path, 0)
-    print("✅ โหลดภาพ ui_check.png สำเร็จ ระบบตรวจจับด่านทำงาน")
 else:
     ui_template = None
-    print("⚠️ ไม่พบไฟล์ ui_check.png บอทจะทำงานแบบไม่อิงด่าน")
 
 def is_in_stage(frame):
     if ui_template is None:
@@ -66,21 +64,17 @@ def is_in_stage(frame):
     return len(loc[0]) > 0
 
 # ==========================================
-# ระบบปุ่ม F9 
+# ระบบคีย์ลัด (F9 เปิด/ปิด | F10 ปิดโปรแกรม)
 # ==========================================
 def toggle_bot():
     global bot_active
     bot_active = not bot_active
-    if bot_active:
-        print("🟢 บอท [เปิด] ทำงานแล้ว! (กด F9 เพื่อปิด)")
-    else:
-        print("🔴 บอท [ปิด] หยุดพัก... (กด F9 เพื่อเปิด)")
+
+def quit_program():
+    os._exit(0) # ฆ่าโปรแกรมทันทีแบบถอนรากถอนโคน
 
 keyboard.add_hotkey('f9', toggle_bot)
-
-print("===========================================")
-print("พร้อมใช้งาน! กด F9 เปิด/ปิดการทำงานของบอท")
-print("===========================================")
+keyboard.add_hotkey('f10', quit_program) 
 
 sct = mss.mss()
 
@@ -92,9 +86,6 @@ def check_lane(hsv_frame, lower_color, upper_color, original_frame):
         return True
     return False
 
-# ==========================================
-# ตัวแปรจับเวลาสำหรับเช็คด่าน (0.5 วิ/ครั้ง)
-# ==========================================
 last_ui_check_time = 0
 in_stage = False
 UI_CHECK_INTERVAL = 0.5  
@@ -107,15 +98,15 @@ while True:
     frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-    # 1. เช็คด่านทุกๆ 0.5 วินาที
+    # เช็คด่านทุกๆ 0.5 วินาที
     if current_time - last_ui_check_time > UI_CHECK_INTERVAL:
         in_stage = is_in_stage(frame)
         last_ui_check_time = current_time 
 
-    # วาดเส้นเลเซอร์สีเหลืองไว้ตลอดเวลา
+    # วาดเส้นเลเซอร์สีเหลือง
     cv2.rectangle(frame, (HIT_ZONE_START_X, 0), (HIT_ZONE_END_X, MONITOR["height"]), (0, 255, 255), 1)
 
-    # 2. เช็คเลเซอร์โน้ตทำงานตลอดเวลาที่เฟรมเรทสูงสุด
+    # เช็คสีตัวโน้ต
     need_a = check_lane(hsv, LOWER_ORANGE, UPPER_ORANGE, frame)
     need_s = check_lane(hsv, LOWER_PURPLE, UPPER_PURPLE, frame)
     need_d = check_lane(hsv, LOWER_GREEN, UPPER_GREEN, frame)
@@ -128,27 +119,30 @@ while True:
     if need_d and (current_time - cooldowns['d'] > COOLDOWN_TIME):
         keys_to_press.append('d')
 
-    # 3. เงื่อนไขกด: ต้องกด F9 เปิดบอทแล้ว + พบรูปอยู่ในด่าน
     if bot_active and in_stage and keys_to_press:
         for key in keys_to_press:
             pydirectinput.keyDown(key)
-            
         for key in keys_to_press:
             pydirectinput.keyUp(key)
             cooldowns[key] = current_time 
 
-    # 4. แสดงข้อความสถานะบนหน้าต่าง
-    # คืนชีพข้อความ (Press F9) กลับมาให้แล้วครับ
-    status_text = "STATUS: ON" if bot_active else "STATUS: OFF (Press F9)"
+    # แสดงข้อความ UI
+    status_text = "STATUS: ON" if bot_active else "STATUS: OFF (F9=Toggle | F10=Exit)"
     stage_text = " [IN STAGE]" if in_stage else " [WAITING...]"
     text_color = (0, 255, 0) if bot_active else (0, 0, 255)
     
     cv2.putText(frame, status_text + stage_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, text_color, 2, cv2.LINE_AA)
-    # ขนาดหน้าจอ
-    cv2.putText(frame, "Require: 1600x900 (Window mode)", (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+    cv2.putText(frame, "Require: 1600x900", (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+    
     cv2.imshow("NOTE DETECTOR", frame)
     
+    # ==========================================
+    # ระบบปิดโปรแกรมแบบ 100%
+    # ==========================================
+    # 1. เช็คว่าหน้าต่างถูกกดปุ่มกากบาท (X) ปิดไปหรือยัง
+    if cv2.getWindowProperty("NOTE DETECTOR", cv2.WND_PROP_VISIBLE) < 1:
+        os._exit(0)
+        
+    # 2. หรือถ้ากดปุ่ม 'q' ที่หน้าต่าง ก็ให้ปิดเช่นกัน
     if cv2.waitKey(1) & 0xFF == ord("q"):
-        break
-
-cv2.destroyAllWindows()
+        os._exit(0)
