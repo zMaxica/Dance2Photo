@@ -31,18 +31,15 @@ cooldowns = {'a': 0, 's': 0, 'd': 0}
 COOLDOWN_TIME = 0.05  
 
 bot_active = False
-show_window = True  
 
 # ==========================================
 # ระบบหา Path รูปภาพ 2 ชั้น (นอก/ใน)
 # ==========================================
 def get_template_path():
-    # 1. เช็คว่ามีไฟล์รูปข้างนอกไหม
     external_path = os.path.abspath("ui_check.png")
     if os.path.exists(external_path):
         return external_path
         
-    # 2. ถ้าไม่มี ค่อยไปดึงรูปที่ฝังมากับ .exe
     try:
         base_path = sys._MEIPASS
     except Exception:
@@ -69,7 +66,7 @@ def is_in_stage(frame):
     return len(loc[0]) > 0
 
 # ==========================================
-# ระบบปุ่ม F9 และ F10
+# ระบบปุ่ม F9 
 # ==========================================
 def toggle_bot():
     global bot_active
@@ -79,20 +76,10 @@ def toggle_bot():
     else:
         print("🔴 บอท [ปิด] หยุดพัก... (กด F9 เพื่อเปิด)")
 
-def toggle_window():
-    global show_window
-    show_window = not show_window
-    if show_window:
-        print("👁️ เปิดหน้าต่างโชว์ภาพ")
-    else:
-        print("🙈 ปิดหน้าต่างโชว์ภาพ (โหมดความเร็วสูงสุด)")
-        cv2.destroyAllWindows()
-
 keyboard.add_hotkey('f9', toggle_bot)
-keyboard.add_hotkey('f10', toggle_window)
 
 print("===========================================")
-print("พร้อมใช้งาน! กด F9 เปิด/ปิด | กด F10 ซ่อน/แสดงภาพ")
+print("พร้อมใช้งาน! กด F9 เปิด/ปิดการทำงานของบอท")
 print("===========================================")
 
 sct = mss.mss()
@@ -125,8 +112,8 @@ while True:
         in_stage = is_in_stage(frame)
         last_ui_check_time = current_time 
 
-    if show_window:
-        cv2.rectangle(frame, (HIT_ZONE_START_X, 0), (HIT_ZONE_END_X, MONITOR["height"]), (0, 255, 255), 1)
+    # วาดเส้นเลเซอร์สีเหลืองไว้ตลอดเวลา
+    cv2.rectangle(frame, (HIT_ZONE_START_X, 0), (HIT_ZONE_END_X, MONITOR["height"]), (0, 255, 255), 1)
 
     # 2. เช็คเลเซอร์โน้ตทำงานตลอดเวลาที่เฟรมเรทสูงสุด
     need_a = check_lane(hsv, LOWER_ORANGE, UPPER_ORANGE, frame)
@@ -150,13 +137,14 @@ while True:
             pydirectinput.keyUp(key)
             cooldowns[key] = current_time 
 
-    if show_window:
-        status_text = "STATUS: ON" if bot_active else "STATUS: OFF"
-        stage_text = " [IN STAGE]" if in_stage else " [WAITING...]"
-        text_color = (0, 255, 0) if (bot_active and in_stage) else (0, 0, 255)
-        
-        cv2.putText(frame, status_text + stage_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, text_color, 2, cv2.LINE_AA)
-        cv2.imshow("NOTE DETECTOR", frame)
+    # 4. แสดงข้อความสถานะบนหน้าต่าง
+    # คืนชีพข้อความ (Press F9) กลับมาให้แล้วครับ
+    status_text = "STATUS: ON" if bot_active else "STATUS: OFF (Press F9)"
+    stage_text = " [IN STAGE]" if in_stage else " [WAITING...]"
+    text_color = (0, 255, 0) if bot_active else (0, 0, 255)
+    
+    cv2.putText(frame, status_text + stage_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, text_color, 2, cv2.LINE_AA)
+    cv2.imshow("NOTE DETECTOR", frame)
     
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
