@@ -127,8 +127,8 @@ while True:
             cooldowns[key] = current_time 
 
     # แสดงข้อความ UI
-    status_text = "STATUS: ON" if bot_active else "STATUS: OFF (F9=Toggle | F10=Exit)"
-    stage_text = " [IN STAGE]" if in_stage else " [WAITING...]"
+    status_text = "STATUS: ON" if bot_active else "STATUS: OFF (F9 Toggle | F10 Exit)"
+    stage_text = " [Dance Mission]" if in_stage else " [WAITING...]"
     text_color = (0, 255, 0) if bot_active else (0, 0, 255)
     
     cv2.putText(frame, status_text + stage_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, text_color, 2, cv2.LINE_AA)
