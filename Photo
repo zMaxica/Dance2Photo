@@ -6,6 +6,11 @@ import pydirectinput
 import time
 import os
 import sys
+import ctypes
+try:
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("dancebot.app.1")
+except:
+    pass
 
 # ==========================================
 # ปรับแต่งความเร็วขั้นสุด
