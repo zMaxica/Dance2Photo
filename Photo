@@ -1,3 +1,4 @@
+
 import cv2
 import numpy as np
 import mss
@@ -7,18 +8,42 @@ import time
 import os
 import sys
 import ctypes
+
 try:
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("NAJANARAK55555.app.1")
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+        "NAJANARAK55555.app.1"
+    )
 except:
     pass
 
 # ==========================================
-# ปรับแต่งความเร็วขั้นสุด
+# NAJANARAK55555 - OPTIMIZED EDITION
+# Core i3 / RAM 8GB / Integrated GPU
 # ==========================================
-pydirectinput.FAILSAFE = False
-pydirectinput.PAUSE = 0  
 
-MONITOR = {"top": 760, "left": 580, "width": 970, "height": 220}
+pydirectinput.FAILSAFE = False
+pydirectinput.PAUSE = 0
+
+# ==========================================
+# ตั้งค่าหลัก
+# ==========================================
+
+MONITOR = {
+    "top": 760,
+    "left": 580,
+    "width": 970,
+    "height": 220
+}
+
+# เปิด/ปิดหน้าต่าง Preview
+SHOW_PREVIEW = True
+
+# อัปเดต Preview สูงสุดประมาณ 20 FPS
+PREVIEW_INTERVAL = 0.05
+
+# ==========================================
+# ตั้งค่าสี HSV
+# ==========================================
 
 LOWER_ORANGE = np.array([5, 150, 150])
 UPPER_ORANGE = np.array([25, 255, 255])
@@ -29,28 +54,53 @@ UPPER_PURPLE = np.array([155, 255, 255])
 LOWER_GREEN = np.array([35, 100, 100])
 UPPER_GREEN = np.array([85, 255, 255])
 
-HIT_ZONE_START_X = 90  
-HIT_ZONE_END_X = 95    
+# ==========================================
+# ตำแหน่งตรวจจับ
+# ==========================================
 
-cooldowns = {'a': 0, 's': 0, 'd': 0}
-COOLDOWN_TIME = 0.05  
+HIT_ZONE_START_X = 90
+HIT_ZONE_END_X = 95
+
+PIXEL_THRESHOLD = 15
+
+# ==========================================
+# Cooldown
+# ==========================================
+
+cooldowns = {
+    'a': 0,
+    's': 0,
+    'd': 0
+}
+
+COOLDOWN_TIME = 0.05
+
+# ==========================================
+# สถานะโปรแกรม
+# ==========================================
 
 bot_active = False
-w_hold_active = False # เพิ่มตัวแปรสถานะกด W
+w_hold_active = False
+running = True
 
 # ==========================================
-# ระบบหา Path รูปภาพ 2 ชั้น (นอก/ใน)
+# ระบบหา Path รูปภาพ
 # ==========================================
+
 def get_template_path():
+
     external_path = os.path.abspath("ui_check.png")
+
     if os.path.exists(external_path):
         return external_path
-        
+
     try:
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.abspath(".")
+
     return os.path.join(base_path, "ui_check.png")
+
 
 template_path = get_template_path()
 
@@ -59,111 +109,418 @@ if os.path.exists(template_path):
 else:
     ui_template = None
 
+# ==========================================
+# ตรวจสอบสถานะด่าน
+# ==========================================
+
 def is_in_stage(frame):
+
     if ui_template is None:
-        return True 
-        
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    res = cv2.matchTemplate(gray_frame, ui_template, cv2.TM_CCOEFF_NORMED)
-    threshold = 0.8 
-    loc = np.where(res >= threshold)
-    return len(loc[0]) > 0
+        return True
+
+    gray_frame = cv2.cvtColor(
+        frame,
+        cv2.COLOR_BGR2GRAY
+    )
+
+    if (
+        ui_template.shape[0] > gray_frame.shape[0]
+        or ui_template.shape[1] > gray_frame.shape[1]
+    ):
+        return False
+
+    res = cv2.matchTemplate(
+        gray_frame,
+        ui_template,
+        cv2.TM_CCOEFF_NORMED
+    )
+
+    return np.any(res >= 0.8)
+
 
 # ==========================================
-# ระบบคีย์ลัด (F8 กด W ค้าง | F9 เปิด/ปิด | F10 ปิดโปรแกรม)
+# Hotkeys
 # ==========================================
+
 def toggle_bot():
+
     global bot_active
+
     bot_active = not bot_active
 
+    print("BOT:", "ON" if bot_active else "OFF")
+
+
 def toggle_w_hold():
+
     global w_hold_active
+
     w_hold_active = not w_hold_active
+
     if w_hold_active:
-        pydirectinput.keyDown('w') # กดค้าง
+        pydirectinput.keyDown('w')
+        print("W: HOLDING")
     else:
-        pydirectinput.keyUp('w')   # ปล่อยปุ่ม
+        pydirectinput.keyUp('w')
+        print("W: RELEASED")
+
 
 def quit_program():
-    # ตรวจสอบเพื่อปล่อยปุ่ม W ก่อนปิด ป้องกันปุ่มค้างที่ Windows
-    if w_hold_active:
-        pydirectinput.keyUp('w')
-    os._exit(0) # ฆ่าโปรแกรมทันทีแบบถอนรากถอนโคน
+
+    global running
+
+    running = False
+
 
 keyboard.add_hotkey('f8', toggle_w_hold)
 keyboard.add_hotkey('f9', toggle_bot)
-keyboard.add_hotkey('f10', quit_program) 
+keyboard.add_hotkey('f10', quit_program)
+
+# ==========================================
+# MSS Capture
+# ==========================================
 
 sct = mss.mss()
 
-def check_lane(hsv_frame, lower_color, upper_color, original_frame):
-    mask = cv2.inRange(hsv_frame, lower_color, upper_color)
-    laser_zone = mask[:, HIT_ZONE_START_X:HIT_ZONE_END_X]
-    pixel_count = cv2.countNonZero(laser_zone)
-    if pixel_count > 15:
-        return True
-    return False
+# ==========================================
+# ตรวจจับสีเฉพาะบริเวณเลเซอร์
+# ==========================================
+
+def check_lane(hsv_roi, lower_color, upper_color):
+
+    mask = cv2.inRange(
+        hsv_roi,
+        lower_color,
+        upper_color
+    )
+
+    pixel_count = cv2.countNonZero(mask)
+
+    return pixel_count > PIXEL_THRESHOLD
+
+
+# ==========================================
+# ตัวแปรระบบ
+# ==========================================
 
 last_ui_check_time = 0
 in_stage = False
-UI_CHECK_INTERVAL = 0.5  
 
-while True:
-    current_time = time.time()
-    
-    screenshot = sct.grab(MONITOR)
-    frame = np.array(screenshot)
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+UI_CHECK_INTERVAL = 0.5
 
-    # เช็คด่านทุกๆ 0.5 วินาที
-    if current_time - last_ui_check_time > UI_CHECK_INTERVAL:
-        in_stage = is_in_stage(frame)
-        last_ui_check_time = current_time 
+fps = 0
+fps_counter = 0
+fps_start = time.perf_counter()
 
-    # วาดเส้นเลเซอร์สีเหลือง
-    cv2.rectangle(frame, (HIT_ZONE_START_X, 0), (HIT_ZONE_END_X, MONITOR["height"]), (0, 255, 255), 1)
+capture_ms = 0
+detect_ms = 0
+input_ms = 0
 
-    # เช็คสีตัวโน้ต
-    need_a = check_lane(hsv, LOWER_ORANGE, UPPER_ORANGE, frame)
-    need_s = check_lane(hsv, LOWER_PURPLE, UPPER_PURPLE, frame)
-    need_d = check_lane(hsv, LOWER_GREEN, UPPER_GREEN, frame)
+last_preview_time = 0
 
-    keys_to_press = []
-    if need_a and (current_time - cooldowns['a'] > COOLDOWN_TIME):
-        keys_to_press.append('a')
-    if need_s and (current_time - cooldowns['s'] > COOLDOWN_TIME):
-        keys_to_press.append('s')
-    if need_d and (current_time - cooldowns['d'] > COOLDOWN_TIME):
-        keys_to_press.append('d')
+# ==========================================
+# สร้างหน้าต่าง Preview
+# ==========================================
 
-    if bot_active and in_stage and keys_to_press:
-        for key in keys_to_press:
-            pydirectinput.keyDown(key)
-        for key in keys_to_press:
+if SHOW_PREVIEW:
+
+    cv2.namedWindow(
+        "NAJANARAK55555",
+        cv2.WINDOW_NORMAL
+    )
+
+# ==========================================
+# MAIN LOOP
+# ==========================================
+
+try:
+
+    while running:
+
+        loop_start = time.perf_counter()
+
+        current_time = time.time()
+
+        # ----------------------------------
+        # 1. CAPTURE
+        # ----------------------------------
+
+        capture_start = time.perf_counter()
+
+        screenshot = sct.grab(MONITOR)
+
+        frame = np.array(screenshot)
+
+        frame = cv2.cvtColor(
+            frame,
+            cv2.COLOR_BGRA2BGR
+        )
+
+        capture_ms = (
+            time.perf_counter() - capture_start
+        ) * 1000
+
+        # ----------------------------------
+        # 2. ตรวจสอบสถานะด่าน
+        # ----------------------------------
+
+        if current_time - last_ui_check_time >= UI_CHECK_INTERVAL:
+
+            in_stage = is_in_stage(frame)
+
+            last_ui_check_time = current_time
+
+        # ----------------------------------
+        # 3. DETECTION
+        # ประมวลผลเฉพาะพื้นที่เลเซอร์
+        # ----------------------------------
+
+        detect_start = time.perf_counter()
+
+        roi = frame[
+            :,
+            HIT_ZONE_START_X:HIT_ZONE_END_X
+        ]
+
+        hsv_roi = cv2.cvtColor(
+            roi,
+            cv2.COLOR_BGR2HSV
+        )
+
+        need_a = check_lane(
+            hsv_roi,
+            LOWER_ORANGE,
+            UPPER_ORANGE
+        )
+
+        need_s = check_lane(
+            hsv_roi,
+            LOWER_PURPLE,
+            UPPER_PURPLE
+        )
+
+        need_d = check_lane(
+            hsv_roi,
+            LOWER_GREEN,
+            UPPER_GREEN
+        )
+
+        detect_ms = (
+            time.perf_counter() - detect_start
+        ) * 1000
+
+        # ----------------------------------
+        # 4. INPUT
+        # ----------------------------------
+
+        keys_to_press = []
+
+        if need_a and current_time - cooldowns['a'] > COOLDOWN_TIME:
+            keys_to_press.append('a')
+
+        if need_s and current_time - cooldowns['s'] > COOLDOWN_TIME:
+            keys_to_press.append('s')
+
+        if need_d and current_time - cooldowns['d'] > COOLDOWN_TIME:
+            keys_to_press.append('d')
+
+        input_start = time.perf_counter()
+
+        if bot_active and in_stage and keys_to_press:
+
+            for key in keys_to_press:
+                pydirectinput.keyDown(key)
+
+            for key in keys_to_press:
+
+                pydirectinput.keyUp(key)
+
+                cooldowns[key] = current_time
+
+        input_ms = (
+            time.perf_counter() - input_start
+        ) * 1000
+
+        # ----------------------------------
+        # 5. FPS COUNTER
+        # ----------------------------------
+
+        fps_counter += 1
+
+        fps_elapsed = time.perf_counter() - fps_start
+
+        if fps_elapsed >= 1.0:
+
+            fps = fps_counter / fps_elapsed
+
+            fps_counter = 0
+
+            fps_start = time.perf_counter()
+
+        # ----------------------------------
+        # 6. PREVIEW
+        # ----------------------------------
+
+        if SHOW_PREVIEW:
+
+            preview_time = time.perf_counter()
+
+            if preview_time - last_preview_time >= PREVIEW_INTERVAL:
+
+                display_frame = frame.copy()
+
+                # เส้นเลเซอร์
+                cv2.rectangle(
+                    display_frame,
+                    (HIT_ZONE_START_X, 0),
+                    (HIT_ZONE_END_X, MONITOR["height"]),
+                    (0, 255, 255),
+                    1
+                )
+
+                # สถานะบอท
+                status_text = (
+                    "STATUS: ON"
+                    if bot_active
+                    else "STATUS: OFF"
+                )
+
+                stage_text = (
+                    " [Dance Mission]"
+                    if in_stage
+                    else " [WAITING...]"
+                )
+
+                text_color = (
+                    (0, 255, 0)
+                    if bot_active
+                    else (0, 0, 255)
+                )
+
+                w_status = (
+                    "HOLDING W"
+                    if w_hold_active
+                    else "W OFF (F8)"
+                )
+
+                w_color = (
+                    (0, 255, 255)
+                    if w_hold_active
+                    else (200, 200, 200)
+                )
+
+                cv2.putText(
+                    display_frame,
+                    status_text + stage_text,
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    text_color,
+                    2,
+                    cv2.LINE_AA
+                )
+
+                cv2.putText(
+                    display_frame,
+                    f"FPS: {fps:.1f}",
+                    (10, 55),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.55,
+                    (255, 255, 255),
+                    1
+                )
+
+                cv2.putText(
+                    display_frame,
+                    f"Capture: {capture_ms:.2f} ms",
+                    (10, 80),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (255, 255, 255),
+                    1
+                )
+
+                cv2.putText(
+                    display_frame,
+                    f"Detect: {detect_ms:.2f} ms",
+                    (10, 102),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (255, 255, 255),
+                    1
+                )
+
+                cv2.putText(
+                    display_frame,
+                    f"Input: {input_ms:.2f} ms",
+                    (10, 124),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (255, 255, 255),
+                    1
+                )
+
+                cv2.putText(
+                    display_frame,
+                    w_status,
+                    (10, 150),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    w_color,
+                    1,
+                    cv2.LINE_AA
+                )
+
+                cv2.imshow(
+                    "NAJANARAK55555",
+                    display_frame
+                )
+
+                last_preview_time = preview_time
+
+            # ตรวจสอบการปิดหน้าต่าง
+            key = cv2.waitKey(1) & 0xFF
+
+            if key == ord('q'):
+                quit_program()
+
+            try:
+
+                if cv2.getWindowProperty(
+                    "NAJANARAK55555",
+                    cv2.WND_PROP_VISIBLE
+                ) < 1:
+
+                    quit_program()
+
+            except cv2.error:
+
+                quit_program()
+
+# ==========================================
+# CLEANUP
+# ==========================================
+
+finally:
+
+    # ปล่อยทุกปุ่มก่อนออก
+    for key in ['w', 'a', 's', 'd']:
+
+        try:
             pydirectinput.keyUp(key)
-            cooldowns[key] = current_time 
+        except:
+            pass
 
-    # แสดงข้อความ UI
-    status_text = "STATUS: ON" if bot_active else "STATUS: OFF (F9 Toggle | F10 Exit)"
-    stage_text = " [Dance Mission]" if in_stage else " [WAITING...]"
-    text_color = (0, 255, 0) if bot_active else (0, 0, 255)
-    
-    # เพิ่มการแสดงผลสถานะปุ่ม W
-    w_text_color = (0, 255, 255) if w_hold_active else (200, 200, 200)
-    w_status = "HOLDING W" if w_hold_active else "W OFF (F8)"
-    
-    cv2.putText(frame, status_text + stage_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, text_color, 2, cv2.LINE_AA)
-    cv2.putText(frame, f"Require: 1600x900 | {w_status}", (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.6, w_text_color, 1, cv2.LINE_AA)
-    
-    cv2.imshow("NAJANARAK55555", frame)
-    
-    # ==========================================
-    # ระบบปิดโปรแกรมแบบ 100%
-    # ==========================================
-    # เปลี่ยนมาเรียกใช้ quit_program() แทนเพื่อความปลอดภัยของปุ่ม W
-    if cv2.getWindowProperty("NAJANARAK55555", cv2.WND_PROP_VISIBLE) < 1:
-        quit_program()
-        
-    if cv2.waitKey(1) & 0xFF == ord("q"):
-        quit_program()
+    w_hold_active = False
+
+    try:
+        cv2.destroyAllWindows()
+    except:
+        pass
+
+    try:
+        keyboard.unhook_all_hotkeys()
+    except:
+        pass
+
+    print("NAJANARAK55555 EXITED")
