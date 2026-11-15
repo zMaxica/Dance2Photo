@@ -1,8 +1,6 @@
-
 import cv2
 import numpy as np
 import mss
-import keyboard
 import pydirectinput
 import time
 import os
@@ -13,16 +11,21 @@ try:
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
         "NAJANARAK55555.app.1"
     )
-except:
+except Exception:
     pass
 
 # ==========================================
-# NAJANARAK55555 - OPTIMIZED EDITION
+# NAJANARAK55555 - OPTIMIZED EDITION (FIXED)
 # Core i3 / RAM 8GB / Integrated GPU
+# แก้: เลิกใช้ keyboard hook -> ใช้ GetAsyncKeyState polling
+#      เพิ่ม sleep ท้ายลูป, timer 1ms, กันจับภาพ error
 # ==========================================
 
 pydirectinput.FAILSAFE = False
 pydirectinput.PAUSE = 0
+
+user32 = ctypes.windll.user32
+winmm = ctypes.windll.winmm
 
 # ==========================================
 # ตั้งค่าหลัก
@@ -139,7 +142,7 @@ def is_in_stage(frame):
 
 
 # ==========================================
-# Hotkeys
+# Hotkeys (ฟังก์ชันการทำงาน)
 # ==========================================
 
 def toggle_bot():
@@ -172,9 +175,31 @@ def quit_program():
     running = False
 
 
-keyboard.add_hotkey('f8', toggle_w_hold)
-keyboard.add_hotkey('f9', toggle_bot)
-keyboard.add_hotkey('f10', quit_program)
+# ==========================================
+# Hotkeys แบบ Polling (ไม่ใช้ hook จึงไม่โดน Windows ถอด)
+# ==========================================
+
+HOTKEYS = {
+    0x77: toggle_w_hold,   # F8
+    0x78: toggle_bot,      # F9
+    0x79: quit_program,    # F10
+}
+
+_prev_state = {vk: False for vk in HOTKEYS}
+
+
+def poll_hotkeys():
+
+    for vk, action in HOTKEYS.items():
+
+        down = bool(user32.GetAsyncKeyState(vk) & 0x8000)
+
+        # จับเฉพาะตอนเพิ่งกดลง
+        if down and not _prev_state[vk]:
+            action()
+
+        _prev_state[vk] = down
+
 
 # ==========================================
 # MSS Capture
@@ -229,6 +254,9 @@ if SHOW_PREVIEW:
         cv2.WINDOW_NORMAL
     )
 
+# ตั้งความละเอียด timer ของ Windows เป็น 1ms
+winmm.timeBeginPeriod(1)
+
 # ==========================================
 # MAIN LOOP
 # ==========================================
@@ -237,24 +265,42 @@ try:
 
     while running:
 
-        loop_start = time.perf_counter()
+        # เช็คปุ่ม F8/F9/F10 ทุกรอบ
+        poll_hotkeys()
 
         current_time = time.time()
 
         # ----------------------------------
-        # 1. CAPTURE
+        # 1. CAPTURE (กัน error ไม่ให้ลูปค้าง)
         # ----------------------------------
 
         capture_start = time.perf_counter()
 
-        screenshot = sct.grab(MONITOR)
+        try:
+            screenshot = sct.grab(MONITOR)
 
-        frame = np.array(screenshot)
+            frame = cv2.cvtColor(
+                np.array(screenshot),
+                cv2.COLOR_BGRA2BGR
+            )
 
-        frame = cv2.cvtColor(
-            frame,
-            cv2.COLOR_BGRA2BGR
-        )
+        except Exception as e:
+
+            print("CAPTURE ERROR:", e)
+
+            # สร้าง mss ใหม่เผื่อ handle เสีย
+            try:
+                sct.close()
+            except Exception:
+                pass
+
+            try:
+                sct = mss.mss()
+            except Exception:
+                pass
+
+            time.sleep(0.1)
+            continue
 
         capture_ms = (
             time.perf_counter() - capture_start
@@ -497,6 +543,12 @@ try:
 
                 quit_program()
 
+        # ----------------------------------
+        # 7. ให้ CPU หายใจ (กัน hotkey/ระบบอื่นอดอยาก)
+        # ----------------------------------
+
+        time.sleep(0.001)
+
 # ==========================================
 # CLEANUP
 # ==========================================
@@ -508,19 +560,24 @@ finally:
 
         try:
             pydirectinput.keyUp(key)
-        except:
+        except Exception:
             pass
 
     w_hold_active = False
 
     try:
         cv2.destroyAllWindows()
-    except:
+    except Exception:
         pass
 
     try:
-        keyboard.unhook_all_hotkeys()
-    except:
+        sct.close()
+    except Exception:
+        pass
+
+    try:
+        winmm.timeEndPeriod(1)
+    except Exception:
         pass
 
     print("NAJANARAK55555 EXITED")
