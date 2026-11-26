@@ -6,6 +6,8 @@ import time
 import os
 import sys
 import ctypes
+import hashlib
+import winreg
 
 try:
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
@@ -15,10 +17,10 @@ except Exception:
     pass
 
 # ==========================================
-# NAJANARAK55555 - OPTIMIZED EDITION (FIXED)
+# NAJANARAK55555 - OPTIMIZED EDITION (MACHINE LOCK + PREVIEW HOTKEY)
 # Core i3 / RAM 8GB / Integrated GPU
-# แก้: เลิกใช้ keyboard hook -> ใช้ GetAsyncKeyState polling
-#      เพิ่ม sleep ท้ายลูป, timer 1ms, กันจับภาพ error
+# F8: เปิด/ปิด Preview | F9: เปิด/ปิด BOT | F10: ออกจากโปรแกรม
+# จำกัดการใช้งานด้วย Windows Machine ID
 # ==========================================
 
 pydirectinput.FAILSAFE = False
@@ -26,6 +28,61 @@ pydirectinput.PAUSE = 0
 
 user32 = ctypes.windll.user32
 winmm = ctypes.windll.winmm
+
+# ==========================================
+# MACHINE LICENSE - อนุญาตเฉพาะเครื่องที่ระบุ
+# ==========================================
+# วิธีเพิ่มเครื่อง:
+# 1) เปิดโปรแกรมบนเครื่องใหม่
+# 2) หากยังไม่ได้รับอนุญาต โปรแกรมจะแสดง MACHINE ID
+# 3) คัดลอก ID ไปเพิ่มใน ALLOWED_MACHINE_IDS ด้านล่าง
+# 4) เพิ่มได้ไม่จำกัดจำนวน โดยใส่ comma คั่นแต่ละรายการ
+#
+# หมายเหตุ: เป็นการล็อกระดับโปรแกรม ไม่ใช่ระบบป้องกันการแก้ไข
+# Source Code หากต้องการป้องกันการแก้โค้ด/ข้ามสิทธิ์จริงจัง
+# ควรใช้ Server ตรวจสอบ License เพิ่มเติม
+
+ALLOWED_MACHINE_IDS = {
+    # "ใส่_MACHINE_ID_เครื่องที่บ้าน",
+    # "ใส่_MACHINE_ID_เครื่องที่ทำงาน",
+}
+
+
+def get_machine_id():
+    """สร้าง Machine ID จาก Windows MachineGuid แล้ว Hash เป็น SHA-256"""
+    try:
+        registry_key = winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Microsoft\Cryptography"
+        )
+        machine_guid, _ = winreg.QueryValueEx(registry_key, "MachineGuid")
+        winreg.CloseKey(registry_key)
+        return hashlib.sha256(machine_guid.encode("utf-8")).hexdigest().upper()
+    except Exception as exc:
+        raise RuntimeError(
+            "ไม่สามารถอ่าน Windows MachineGuid ได้: " + str(exc)
+        )
+
+
+def verify_machine():
+    try:
+        machine_id = get_machine_id()
+    except Exception:
+        # หากอ่าน Machine ID ไม่ได้ ให้ปิดแบบเงียบเช่นกัน
+        os._exit(0)
+
+    if machine_id not in ALLOWED_MACHINE_IDS:
+        # Silent Exit: เครื่องที่ไม่ได้ลงทะเบียนจะปิดตัวเองทันที
+        # ไม่แสดงข้อความ, Machine ID หรือหน้าต่างแจ้งเตือน
+        os._exit(0)
+
+    # เครื่องที่ได้รับอนุญาตจึงทำงานต่อ
+    print("[LICENSE] Authorized machine")
+    print("[HOTKEY] F8=Preview ON/OFF | F9=BOT ON/OFF | F10=Exit")
+
+
+# ตรวจสอบสิทธิ์ก่อนเริ่มทำงานหลัก
+verify_machine()
 
 # ==========================================
 # ตั้งค่าหลัก
@@ -83,7 +140,6 @@ COOLDOWN_TIME = 0.05
 # ==========================================
 
 bot_active = False
-w_hold_active = False
 running = True
 
 # ==========================================
@@ -154,18 +210,25 @@ def toggle_bot():
     print("BOT:", "ON" if bot_active else "OFF")
 
 
-def toggle_w_hold():
+def toggle_preview():
 
-    global w_hold_active
+    global SHOW_PREVIEW
 
-    w_hold_active = not w_hold_active
+    SHOW_PREVIEW = not SHOW_PREVIEW
 
-    if w_hold_active:
-        pydirectinput.keyDown('w')
-        print("W: HOLDING")
+    if SHOW_PREVIEW:
+        try:
+            cv2.namedWindow("NAJANARAK55555", cv2.WINDOW_NORMAL)
+            print("PREVIEW: ON")
+        except cv2.error as exc:
+            SHOW_PREVIEW = False
+            print("PREVIEW ERROR:", exc)
     else:
-        pydirectinput.keyUp('w')
-        print("W: RELEASED")
+        try:
+            cv2.destroyWindow("NAJANARAK55555")
+        except cv2.error:
+            pass
+        print("PREVIEW: OFF")
 
 
 def quit_program():
@@ -180,9 +243,9 @@ def quit_program():
 # ==========================================
 
 HOTKEYS = {
-    0x77: toggle_w_hold,   # F8
-    0x78: toggle_bot,      # F9
-    0x79: quit_program,    # F10
+    0x77: toggle_preview,  # F8 - เปิด/ปิด Preview
+    0x78: toggle_bot,      # F9 - เปิด/ปิด BOT
+    0x79: quit_program,    # F10 - ออกจากโปรแกรม
 }
 
 _prev_state = {vk: False for vk in HOTKEYS}
@@ -248,11 +311,7 @@ last_preview_time = 0
 # ==========================================
 
 if SHOW_PREVIEW:
-
-    cv2.namedWindow(
-        "NAJANARAK55555",
-        cv2.WINDOW_NORMAL
-    )
+    cv2.namedWindow("NAJANARAK55555", cv2.WINDOW_NORMAL)
 
 # ตั้งความละเอียด timer ของ Windows เป็น 1ms
 winmm.timeBeginPeriod(1)
@@ -443,18 +502,6 @@ try:
                     else (0, 0, 255)
                 )
 
-                w_status = (
-                    "HOLDING W"
-                    if w_hold_active
-                    else "W OFF (F8)"
-                )
-
-                w_color = (
-                    (0, 255, 255)
-                    if w_hold_active
-                    else (200, 200, 200)
-                )
-
                 cv2.putText(
                     display_frame,
                     status_text + stage_text,
@@ -506,17 +553,6 @@ try:
                     1
                 )
 
-                cv2.putText(
-                    display_frame,
-                    w_status,
-                    (10, 150),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    w_color,
-                    1,
-                    cv2.LINE_AA
-                )
-
                 cv2.imshow(
                     "NAJANARAK55555",
                     display_frame
@@ -556,15 +592,14 @@ try:
 finally:
 
     # ปล่อยทุกปุ่มก่อนออก
-    for key in ['w', 'a', 's', 'd']:
+    for key in ['a', 's', 'd']:
 
         try:
             pydirectinput.keyUp(key)
         except Exception:
             pass
 
-    w_hold_active = False
-
+    
     try:
         cv2.destroyAllWindows()
     except Exception:
