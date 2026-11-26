@@ -43,8 +43,8 @@ winmm = ctypes.windll.winmm
 
 ALLOWED_MACHINE_IDS = {
     # ใส่ MachineGuid จาก Windows Registry โดยตรง (ไม่ต้อง Hash)
-    # "5aed1745d-e8c9-3a15-be92a",  # เครื่องที่บ้าน
-    # "5e753550-5356-4d27-87b0-ef862707388d",  # เครื่องที่ทำงาน
+    "5aed1745d-e8c9-3a15-be92a",  # เครื่องที่บ้าน
+    "5e753550-5356-4d27-87b0-ef862707388d",  # เครื่องที่ทำงาน
 }
 
 
