@@ -6,7 +6,6 @@ import time
 import os
 import sys
 import ctypes
-import hashlib
 import winreg
 
 try:
@@ -43,21 +42,24 @@ winmm = ctypes.windll.winmm
 # ควรใช้ Server ตรวจสอบ License เพิ่มเติม
 
 ALLOWED_MACHINE_IDS = {
-    # "ใส่_MACHINE_ID_เครื่องที่บ้าน",
-    # "ใส่_MACHINE_ID_เครื่องที่ทำงาน",
+    # ใส่ MachineGuid จาก Windows Registry โดยตรง (ไม่ต้อง Hash)
+    # "5aed1745d-e8c9-3a15-be92a",  # เครื่องที่บ้าน
+    # "5e753550-5356-4d27-87b0-ef862707388d",  # เครื่องที่ทำงาน
 }
 
 
 def get_machine_id():
-    """สร้าง Machine ID จาก Windows MachineGuid แล้ว Hash เป็น SHA-256"""
+    """อ่าน MachineGuid จาก Windows Registry โดยตรง"""
     try:
         registry_key = winreg.OpenKey(
             winreg.HKEY_LOCAL_MACHINE,
             r"SOFTWARE\Microsoft\Cryptography"
         )
-        machine_guid, _ = winreg.QueryValueEx(registry_key, "MachineGuid")
-        winreg.CloseKey(registry_key)
-        return hashlib.sha256(machine_guid.encode("utf-8")).hexdigest().upper()
+        try:
+            machine_guid, _ = winreg.QueryValueEx(registry_key, "MachineGuid")
+        finally:
+            winreg.CloseKey(registry_key)
+        return str(machine_guid).strip().lower()
     except Exception as exc:
         raise RuntimeError(
             "ไม่สามารถอ่าน Windows MachineGuid ได้: " + str(exc)
