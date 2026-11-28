@@ -41,6 +41,11 @@ winmm = ctypes.windll.winmm
 # Source Code หากต้องการป้องกันการแก้โค้ด/ข้ามสิทธิ์จริงจัง
 # ควรใช้ Server ตรวจสอบ License เพิ่มเติม
 
+# ตั้งค่าเปิด/ปิดระบบตรวจสอบ Machine ID
+ENABLE_MACHINE_LOCK = False
+# True  = เปิดระบบตรวจสอบ อนุญาตเฉพาะเครื่องใน ALLOWED_MACHINE_IDS
+# False = ปิดระบบตรวจสอบ อนุญาตให้ทุกเครื่องใช้งาน
+
 ALLOWED_MACHINE_IDS = {
     # ใส่ MachineGuid จาก Windows Registry โดยตรง (ไม่ต้อง Hash)
     "5aed1745d-e8c9-3a15-be92a",  # เครื่องที่บ้าน
@@ -67,6 +72,13 @@ def get_machine_id():
 
 
 def verify_machine():
+    # หากปิด Machine Lock จะข้ามการตรวจสอบและอนุญาตทุกเครื่อง
+    if not ENABLE_MACHINE_LOCK:
+        print("[LICENSE] Machine Lock: DISABLED (all machines allowed)")
+        print("[HOTKEY] F8=Preview ON/OFF | F9=BOT ON/OFF | F10=Exit")
+        return
+
+    # หากเปิด Machine Lock ให้ตรวจสอบ MachineGuid ตามรายชื่อที่อนุญาต
     try:
         machine_id = get_machine_id()
     except Exception:
@@ -74,11 +86,9 @@ def verify_machine():
         os._exit(0)
 
     if machine_id not in ALLOWED_MACHINE_IDS:
-        # Silent Exit: เครื่องที่ไม่ได้ลงทะเบียนจะปิดตัวเองทันที
-        # ไม่แสดงข้อความ, Machine ID หรือหน้าต่างแจ้งเตือน
+        # เครื่องที่ไม่ได้ลงทะเบียนจะปิดตัวเองทันที
         os._exit(0)
 
-    # เครื่องที่ได้รับอนุญาตจึงทำงานต่อ
     print("[LICENSE] Authorized machine")
     print("[HOTKEY] F8=Preview ON/OFF | F9=BOT ON/OFF | F10=Exit")
 
